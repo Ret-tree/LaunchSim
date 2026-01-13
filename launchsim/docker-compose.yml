@@ -1,0 +1,51 @@
+# LAUNCHSIM Full Stack
+# =====================
+#
+# Usage:
+#   docker-compose up -d        # Start services
+#   docker-compose logs -f      # View logs
+#   docker-compose down         # Stop services
+
+version: '3.8'
+
+services:
+  # RocketPy Backend Server
+  backend:
+    build: ./backend
+    container_name: launchsim-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend (static files with nginx)
+  frontend:
+    image: nginx:alpine
+    container_name: launchsim-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./public:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Optional: Redis for caching simulation results
+  # redis:
+  #   image: redis:alpine
+  #   container_name: launchsim-redis
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped
+
+networks:
+  default:
+    name: launchsim-network

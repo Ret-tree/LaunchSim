@@ -1,0 +1,49 @@
+{
+  "name": "launchsim",
+  "version": "1.0.0",
+  "description": "Free rocket flight simulator with 6-DOF physics, 3D visualization, and comprehensive analysis tools",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "lint": "eslint src/",
+    "physics-test": "node --experimental-specifier-resolution=node tests/physics.test.js"
+  },
+  "keywords": [
+    "rocket",
+    "simulation",
+    "physics",
+    "6-dof",
+    "aerospace",
+    "rocketry",
+    "openrocket",
+    "model-rockets",
+    "high-power-rockets",
+    "flight-simulation",
+    "three.js"
+  ],
+  "author": "BlackDot Tech",
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0",
+    "eslint": "^8.55.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ret-tree/launchsim"
+  },
+  "homepage": "https://github.com/Ret-tree/launchsim",
+  "bugs": {
+    "url": "https://github.com/Ret-tree/launchsim/issues"
+  }
+}

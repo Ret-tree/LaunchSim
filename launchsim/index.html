@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LaunchSim - Rocket Flight Simulation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    #app { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  
+  <!-- Load Three.js for 3D visualization -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // OrbitControls for Three.js r128
+    // Inlined to avoid CORS issues with CDN
+    THREE.OrbitControls = function(object, domElement) {
+      this.object = object;
+      this.domElement = domElement;
+      this.enabled = true;
+      this.target = new THREE.Vector3();
+      this.minDistance = 0;
+      this.maxDistance = Infinity;
+      this.minPolarAngle = 0;
+      this.maxPolarAngle = Math.PI;
+      this.enableDamping = false;
+      this.dampingFactor = 0.05;
+      
+      var scope = this;
+      var spherical = new THREE.Spherical();
+      var sphericalDelta = new THREE.Spherical();
+      var scale = 1;
+      var panOffset = new THREE.Vector3();
+      var rotateStart = new THREE.Vector2();
+      var rotateEnd = new THREE.Vector2();
+      var rotateDelta = new THREE.Vector2();
+      var panStart = new THREE.Vector2();
+      var panEnd = new THREE.Vector2();
+      var panDelta = new THREE.Vector2();
+      var STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2 };
+      var state = STATE.NONE;
+      
+      this.update = function() {
+        var offset = new THREE.Vector3();
+        var quat = new THREE.Quaternion().setFromUnitVectors(object.up, new THREE.Vector3(0, 1, 0));
+        var quatInverse = quat.clone().invert();
+        var lastPosition = new THREE.Vector3();
+        
+        return function update() {
+          var position = scope.object.position;
+          offset.copy(position).sub(scope.target);
+          offset.applyQuaternion(quat);
+          spherical.setFromVector3(offset);
+          
+          if (scope.enableDamping) {
+            spherical.theta += sphericalDelta.theta * scope.dampingFactor;
+            spherical.phi += sphericalDelta.phi * scope.dampingFactor;
+          } else {
+            spherical.theta += sphericalDelta.theta;
+            spherical.phi += sphericalDelta.phi;
+          }
+          
+          spherical.phi = Math.max(scope.minPolarAngle, Math.min(scope.maxPolarAngle, spherical.phi));
+          spherical.makeSafe();
+          spherical.radius *= scale;
+          spherical.radius = Math.max(scope.minDistance, Math.min(scope.maxDistance, spherical.radius));
+          scope.target.add(panOffset);
+          
+          offset.setFromSpherical(spherical);
+          offset.applyQuaternion(quatInverse);
+          position.copy(scope.target).add(offset);
+          scope.object.lookAt(scope.target);
+          
+          if (scope.enableDamping) {
+            sphericalDelta.theta *= (1 - scope.dampingFactor);
+            sphericalDelta.phi *= (1 - scope.dampingFactor);
+            panOffset.multiplyScalar(1 - scope.dampingFactor);
+          } else {
+            sphericalDelta.set(0, 0, 0);
+            panOffset.set(0, 0, 0);
+          }
+          
+          scale = 1;
+          return false;
+        };
+      }();
+      
+      function onMouseDown(event) {
+        if (!scope.enabled) return;
+        event.preventDefault();
+        if (event.button === 0) {
+          state = STATE.ROTATE;
+          rotateStart.set(event.clientX, event.clientY);
+        } else if (event.button === 2) {
+          state = STATE.PAN;
+          panStart.set(event.clientX, event.clientY);
+        }
+        document.addEventListener('mousemove', onMouseMove, false);
+        document.addEventListener('mouseup', onMouseUp, false);
+      }
+      
+      function onMouseMove(event) {
+        if (!scope.enabled) return;
+        event.preventDefault();
+        if (state === STATE.ROTATE) {
+          rotateEnd.set(event.clientX, event.clientY);
+          rotateDelta.subVectors(rotateEnd, rotateStart).multiplyScalar(0.005);
+          sphericalDelta.theta -= rotateDelta.x;
+          sphericalDelta.phi -= rotateDelta.y;
+          rotateStart.copy(rotateEnd);
+        } else if (state === STATE.PAN) {
+          panEnd.set(event.clientX, event.clientY);
+          panDelta.subVectors(panEnd, panStart).multiplyScalar(0.5);
+          var offset = new THREE.Vector3();
+          offset.setFromMatrixColumn(scope.object.matrix, 0);
+          offset.multiplyScalar(-panDelta.x);
+          panOffset.add(offset);
+          offset.setFromMatrixColumn(scope.object.matrix, 1);
+          offset.multiplyScalar(panDelta.y);
+          panOffset.add(offset);
+          panStart.copy(panEnd);
+        }
+        scope.update();
+      }
+      
+      function onMouseUp() {
+        document.removeEventListener('mousemove', onMouseMove, false);
+        document.removeEventListener('mouseup', onMouseUp, false);
+        state = STATE.NONE;
+      }
+      
+      function onMouseWheel(event) {
+        if (!scope.enabled) return;
+        event.preventDefault();
+        if (event.deltaY < 0) {
+          scale /= 0.95;
+        } else if (event.deltaY > 0) {
+          scale *= 0.95;
+        }
+        scope.update();
+      }
+      
+      domElement.addEventListener('mousedown', onMouseDown, false);
+      domElement.addEventListener('wheel', onMouseWheel, { passive: false });
+      domElement.addEventListener('contextmenu', function(e) { e.preventDefault(); }, false);
+      
+      this.update();
+    };
+  </script>
+
+  <!-- Load other libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script type="module">
+    // Import modules
+    import { ORKImporter, ORKImportUI } from './src/import/ork-importer.js';
+    import { ThrustCurveAPI, MotorDatabaseManager } from './src/api/thrustcurve.js';
+    import { WeatherAPI, WeatherDisplay } from './src/api/weather.js';
+    import { MonteCarloEngine, TARCScoring } from './src/analysis/montecarlo.js';
+    import { FlightOptimizer, MotorFilter, QuickSim, OptimizerUI } from './src/analysis/optimizer.js';
+    import { FlightDataImporter, FlightComparison, FlightDataUI } from './src/analysis/flightdata.js';
+    import { FinFlutterAnalysis, FinGeometry, FlutterAnalysisUI, MATERIAL_DATABASE } from './src/analysis/flutter.js';
+    import { StabilityAnalysis, StabilityAnalysisUI, CGCalculator } from './src/analysis/stability.js';
+    import { RocketProfileRenderer, RocketProfileComponent, NoseShapes } from './src/visualization/profile.js';
+    import { DualDeploySimulation, RecoveryConfig, RecoveryPlanner, WindProfile } from './src/recovery/dualdeploy.js';
+    import { LaunchDayAssistant, WeatherAssessment, DriftPredictor, PreFlightChecklist } from './src/launchday/assistant.js';
+    import { FlightLog, FlightRecord, PredictionAnalyzer, FLIGHT_OUTCOMES } from './src/logging/flightlog.js';
+    import { ComponentDatabase, BodyTube, NoseCone, FinSet, Parachute as ParachuteComponent, MANUFACTURERS, MATERIALS } from './src/database/components.js';
+    import { MultiStageRocket, Stage, StageMotor, STAGE_TYPES, SEPARATION_TRIGGERS, IGNITION_TRIGGERS, PRESET_CONFIGS } from './src/staging/multistage.js';
+    import { Rocket3DViewer, ColorUtils, SmokeTrailSystem, ParachuteSystem, StageSeparationSystem, TerrainSystem, WindVisualizationSystem, TrajectoryInspector, TelemetryHUD, ForceVectorSystem, MachConeEffect, MultiTrajectorySystem, SafeZoneOverlay, AttitudeIndicatorWidget, HeatingIndicator, KMLExporter, WeatherEffectsSystem, SkyboxSystem, FirstPersonCamera } from './src/visualization/3d-viewer.js';
+    import { AltimeterDataImporter, GPSTracker, ClubSharing, ALTIMETER_FORMATS } from './src/integration/integration.js';
+    import { LaunchSimApp } from './src/frontend/app.js';
+    
+    // Make available globally
+    window.ORKImporter = ORKImporter;
+    window.ThrustCurveAPI = ThrustCurveAPI;
+    window.WeatherAPI = WeatherAPI;
+    window.MonteCarloEngine = MonteCarloEngine;
+    window.TARCScoring = TARCScoring;
+    window.FlightOptimizer = FlightOptimizer;
+    window.MotorFilter = MotorFilter;
+    window.QuickSim = QuickSim;
+    window.OptimizerUI = OptimizerUI;
+    window.FlightDataImporter = FlightDataImporter;
+    window.FlightComparison = FlightComparison;
+    window.FlightDataUI = FlightDataUI;
+    window.FinFlutterAnalysis = FinFlutterAnalysis;
+    window.FinGeometry = FinGeometry;
+    window.FlutterAnalysisUI = FlutterAnalysisUI;
+    window.MATERIAL_DATABASE = MATERIAL_DATABASE;
+    window.StabilityAnalysis = StabilityAnalysis;
+    window.StabilityAnalysisUI = StabilityAnalysisUI;
+    window.CGCalculator = CGCalculator;
+    window.RocketProfileRenderer = RocketProfileRenderer;
+    window.RocketProfileComponent = RocketProfileComponent;
+    window.NoseShapes = NoseShapes;
+    window.DualDeploySimulation = DualDeploySimulation;
+    window.RecoveryConfig = RecoveryConfig;
+    window.RecoveryPlanner = RecoveryPlanner;
+    window.WindProfile = WindProfile;
+    window.LaunchDayAssistant = LaunchDayAssistant;
+    window.WeatherAssessment = WeatherAssessment;
+    window.DriftPredictor = DriftPredictor;
+    window.PreFlightChecklist = PreFlightChecklist;
+    window.FlightLog = FlightLog;
+    window.FlightRecord = FlightRecord;
+    window.PredictionAnalyzer = PredictionAnalyzer;
+    window.FLIGHT_OUTCOMES = FLIGHT_OUTCOMES;
+    window.ComponentDatabase = ComponentDatabase;
+    window.BodyTube = BodyTube;
+    window.NoseCone = NoseCone;
+    window.FinSet = FinSet;
+    window.ParachuteComponent = ParachuteComponent;
+    window.MANUFACTURERS = MANUFACTURERS;
+    window.MATERIALS = MATERIALS;
+    window.MultiStageRocket = MultiStageRocket;
+    window.Stage = Stage;
+    window.StageMotor = StageMotor;
+    window.STAGE_TYPES = STAGE_TYPES;
+    window.SEPARATION_TRIGGERS = SEPARATION_TRIGGERS;
+    window.IGNITION_TRIGGERS = IGNITION_TRIGGERS;
+    window.PRESET_CONFIGS = PRESET_CONFIGS;
+    window.Rocket3DViewer = Rocket3DViewer;
+    window.ColorUtils3D = ColorUtils;
+    window.SmokeTrailSystem = SmokeTrailSystem;
+    window.ParachuteSystem = ParachuteSystem;
+    window.StageSeparationSystem = StageSeparationSystem;
+    window.TerrainSystem = TerrainSystem;
+    window.WindVisualizationSystem = WindVisualizationSystem;
+    window.TrajectoryInspector = TrajectoryInspector;
+    window.TelemetryHUD = TelemetryHUD;
+    window.ForceVectorSystem = ForceVectorSystem;
+    window.MachConeEffect = MachConeEffect;
+    window.MultiTrajectorySystem = MultiTrajectorySystem;
+    window.SafeZoneOverlay = SafeZoneOverlay;
+    window.AttitudeIndicatorWidget = AttitudeIndicatorWidget;
+    window.HeatingIndicator = HeatingIndicator;
+    window.KMLExporter = KMLExporter;
+    window.WeatherEffectsSystem = WeatherEffectsSystem;
+    window.SkyboxSystem = SkyboxSystem;
+    window.FirstPersonCamera = FirstPersonCamera;
+    window.AltimeterDataImporter = AltimeterDataImporter;
+    window.GPSTracker = GPSTracker;
+    window.ClubSharing = ClubSharing;
+    window.ALTIMETER_FORMATS = ALTIMETER_FORMATS;
+    window.LaunchSimApp = LaunchSimApp;
+    
+    // Initialize app
+    const app = new LaunchSimApp('app');
+    app.initialize().then(() => {
+      console.log('LaunchSim initialized');
+    }).catch(err => {
+      console.error('Initialization error:', err);
+    });
+  </script>
+</body>
+</html>
