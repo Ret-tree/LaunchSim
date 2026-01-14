@@ -58,7 +58,15 @@ LaunchSim provides accurate 6-DOF physics simulation, 3D visualization, and comp
 ## 🚀 Quick Start
 
 ### Option 1: Use Online (Recommended)
-Visit **[launchsim.app](https://launchsim.app)** — no installation needed.
+In one terminal cd to /launchsim/backend. 
+Create a virtual environment. "Python3 -m venv GUI"
+Activate virtual environemt "source GUI/bin/activate"
+"pip install -r requirements.txt"
+Run "python server.py"
+
+In a separate terminal cd /launchsim/
+Then run "python3 -m http.server 8080"
+Visit "localhost:8080" in your web browser to run
 
 ### Option 2: Run Locally
 
